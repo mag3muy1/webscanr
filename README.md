@@ -118,6 +118,10 @@ pip install -r requirements.txt
 ```bash
 export HF_TOKEN=xxxxxxxxxxx # if you wish to use the reporting feature
 
+# without report
+python3 main.py http://target.com --all
+
+# producing report
 python3 main.py http://target.com --all --report-format pdf --report-name name_goes-here
 ```
 
