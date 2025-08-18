@@ -144,7 +144,7 @@ python3 main.py http://target.com --all --report-format pdf --report-name name_g
 | `--sqli`                | Run SQL injection scan                                         |
 | `--check-misconfig`     | Run misconfiguration checks (headers, SSL, exposed files)      |
 | `--crawl`               | Crawl and list internal pages                                  |
-| `--scan-crawled`        | Scan all crawled pages with enabled scans (XSS, DOM XSS, SQLi) |
+| `--scan-crawled`        | Scan all crawled pages with enabled scans (XSS, DOM XSS, SQLi) EXTREMELY SLOW|
 | `--max-pages MAX_PAGES` | Maximum number of pages to crawl (**default:** 30)             |
 | `--nvd-check`           | Check detected technologies against NVD                        |
 
