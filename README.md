@@ -104,11 +104,20 @@ cd webscanr
 pip install -r requirements.txt
 ```
 
+## Generating HuggingFace Token
+1. Register a HuggingFace account at https://huggingface.co/
+2. Visit token settings at https://huggingface.co/settings/tokens
+3. Click "Create New Token"
+4. Choose "Write" for the token type
+5. Copy the token generated
+
 ---
 
 ## 🚀 Usage
 
 ```bash
+export HF_TOKEN=xxxxxxxxxxx # if you wish to use the reporting feature
+
 python3 main.py http://target.com --all --report-format pdf --report-name name_goes-here
 ```
 
