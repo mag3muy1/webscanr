@@ -1,8 +1,4 @@
-# WebScanr 🔍
-                                                  
-                                                       =======================
-                                                           w e b s c a n r  ᵛ¹
-                                                       =======================
+## WebScanr
 
 **WebScanr** is an open-source automated web vulnerability scanner designed to detect common web application vulnerabilities, map them to CVEs, and generate clear, actionable reports.
 It is built to be a lightweight yet powerful alternative to commercial scanners like **Acunetix** and **Burp Suite**, optimized for **speed, accuracy, and usability**.
