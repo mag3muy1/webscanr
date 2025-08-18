@@ -81,18 +81,45 @@ pip install -r requirements.txt
 ## 🚀 Usage
 
 ```bash
-python3 main.py --url http://target.com --scan all --report pdf
+python3 main.py http://target.com --all --report-format pdf --report-name name_goes-here
 ```
 
-### Options
+---
 
-| Flag        | Description                                                 |
-| ----------- | ----------------------------------------------------------- |
-| `--url`     | Target URL                                                  |
-| `--scan`    | Select scan type: `xss`, `sqli`, `misconfig`, `tech`, `all` |
-| `--report`  | Output format: `json`, `pdf`, `docx`                        |
-| `--payload` | Custom payload file                                         |
-| `--threads` | Number of concurrent threads                                |
+### CLI Options
+
+| Argument            | Description                            |
+| ------------------- | -------------------------------------- |
+| `url`               | **(positional)** Target URL            |
+| `-h, --help`        | Show help message and exit             |
+| `--threads THREADS` | Number of threads (**default:** 10)    |
+| `--stop-on-success` | Stop when first vulnerability is found |
+
+#### 🔎 Scan Options
+
+| Flag                    | Description                                                    |
+| ----------------------- | -------------------------------------------------------------- |
+| `--all`                 | Run all available scans                                        |
+| `--tech`                | Run technology fingerprinting                                  |
+| `--check-outdated`      | Check if detected technologies are outdated                    |
+| `--xss`                 | Run reflected XSS scan                                         |
+| `--dom`                 | Run DOM-based XSS detection (Selenium)                         |
+| `--sqli`                | Run SQL injection scan                                         |
+| `--check-misconfig`     | Run misconfiguration checks (headers, SSL, exposed files)      |
+| `--crawl`               | Crawl and list internal pages                                  |
+| `--scan-crawled`        | Scan all crawled pages with enabled scans (XSS, DOM XSS, SQLi) |
+| `--max-pages MAX_PAGES` | Maximum number of pages to crawl (**default:** 30)             |
+| `--nvd-check`           | Check detected technologies against NVD                        |
+
+#### 📝 Reporting Options
+
+| Flag                              | Description                                            |
+| --------------------------------- | ------------------------------------------------------ |
+| `--report-format {word,pdf,json}` | Generate report in the specified format                |
+| `--report-name REPORT_NAME`       | Specify the output report filename (without extension) |
+| `--stdout`                        | Print output as JSON in terminal                       |
+| `--verbose`                       | Show verbose output when using `--stdout`              |
+
 
 ---
 
