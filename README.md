@@ -1,4 +1,8 @@
 # WebScanr 🔍
+                                                  
+                                                       =======================
+                                                           w e b s c a n r  ᵛ¹
+                                                       =======================
 
 **WebScanr** is an open-source automated web vulnerability scanner designed to detect common web application vulnerabilities, map them to CVEs, and generate clear, actionable reports.
 It is built to be a lightweight yet powerful alternative to commercial scanners like **Acunetix** and **Burp Suite**, optimized for **speed, accuracy, and usability**.
@@ -47,20 +51,48 @@ It is built to be a lightweight yet powerful alternative to commercial scanners 
 ## 📂 Project Structure
 
 ```
-webscanr/
-│── main.py               # Entry point: handles CLI and orchestrates scans
+webscanr
+├── main.py                 # Entry point: CLI and scan orchestration
+├── requirements.txt        # Python dependencies
+├── README.md               # Project documentation
+├── ExposedPath.txt         # Payloads for exposed path scanning
+├── SQLPayload.txt          # SQL injection payloads
+├── XSSPayload.txt          # XSS payloads
 │
-├── payloads/
-│   └── XSSPayload.txt    # Example XSS payloads
+├── fetch_version/          # Version fetchers for outdated components
+│   ├── bootstrapfetch.py
+│   ├── electronfetch.py
+│   ├── momentfetch.py
+│   ├── reactfetch.py
+│   ├── tensorfetch.py
+│   └── __init__.py
 │
-├── scanner/
+├── scanner/                # Core scanning modules
 │   ├── __init__.py
-│   ├── payload_manager.py # Load and manage payloads
-│   ├── tech_scanner.py    # WebTech-based tech fingerprinting
-│   ├── form_scanner.py    # Extracts and submits forms
-│   ├── xss_scanner.py     # Reflected XSS scanning
-│   ├── popup_scanner.py   # Popup-based XSS detection (Selenium)
-│   └── dom_scanner.py     # DOM-based injection detection
+│   ├── ai_helper.py        # HuggingFace LLM integration for reporting
+│   ├── form_scanner.py     # Extract and submit forms
+│   ├── misconfig_scanner.py# Misconfiguration checks (headers, SSL, files)
+│   ├── nvd_checker.py      # NVD CVE integration
+│   ├── outdated_checker.py # Compare versions against latest
+│   ├── payload_manager.py  # Load/manage payloads
+│   ├── report_gen.py       # Report generation (Word, PDF, JSON)
+│   ├── sql_scanner.py      # SQL Injection scanner
+│   ├── tech_scanner.py     # WebTech-based fingerprinting
+│   ├── web_crawl.py        # Crawler for internal links
+│   ├── xss_scanner.py      # Reflected XSS detection
+│   └── templates/          # Report templates
+│       ├── pdf_template.html
+│       └── word_template.docx
+│
+├── reports/                # Generated reports
+│   ├── finalized-reporting.pdf
+│   ├── hf-token-new-model.docx
+│   ├── testing.pdf
+│   ├── webscanr_report_*.{pdf,docx,json}
+│   └── ...
+│
+└── __pycache__/            # Python cache files
+
 ```
 
 ---
