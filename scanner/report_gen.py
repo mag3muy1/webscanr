@@ -1,8 +1,3 @@
-def to_latin1(text):
-    if not isinstance(text, str):
-        text = str(text)
-    return text.encode("latin-1", "replace").decode("latin-1")
-# updated_report_gen.py
 import json
 import os
 from datetime import datetime
@@ -10,11 +5,17 @@ from docx import Document
 from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 from fpdf import FPDF, HTMLMixin
-from typing import Dict, List, Optional, Union
-from pprint import pprint
-import requests
+from typing import Dict, Optional, Union
 import logging
 from .ai_helper import AIHelper
+import matplotlib.pyplot as plt
+from collections import defaultdict
+
+
+def to_latin1(text):
+    if not isinstance(text, str):
+        text = str(text)
+    return text.encode("latin-1", "replace").decode("latin-1")
 
 class HTMLPDF(FPDF, HTMLMixin):
     pass
@@ -123,6 +124,105 @@ class ReportGenerator:
             return f"CVSS: {score:.1f} ({severity})"
         except ValueError:
             return f"CVSS: {cvss_score}"
+        
+    def _group_by_severity(self, findings):
+        """Return dict: {'Critical': [...], 'High': [...], 'Medium': [...], 'Low': [...], 'Other': [...]}"""
+        buckets = {"Critical": [], "High": [], "Medium": [], "Low": [], "Other": []}
+        for f in findings or []:
+            sev = self._normalize_severity(f.get("severity", "Unknown"))
+            if sev not in buckets:
+                sev = "Other"
+            buckets[sev].append(f)
+        return buckets
+
+    def _sla(self, severity: str) -> str:
+        """SLA guidance by severity (used in Word and PDF)."""
+        sev = (severity or "").lower()
+        if sev.startswith("crit") or sev == "critical":
+            return "Fix within 7 days"
+        if sev.startswith("high"):
+            return "Fix within 7 days"
+        if sev.startswith("med"):
+            return "Fix within 30 days"
+        if sev.startswith("low"):
+            return "Fix within 90 days"
+        return "Fix as part of routine backlog"
+
+    def _generate_charts(self, findings, output_dir=None):
+        """
+        Create pie (severity) and bar (category) charts.
+        Returns (pie_path, bar_path) or (None, None) on failure.
+        """
+        try:
+            outdir = output_dir or self.output_dir or "reports"
+            os.makedirs(outdir, exist_ok=True)
+
+            # --- Pie: by severity
+            severities = ["Critical", "High", "Medium", "Low", "Info"]
+            severity_colors = {
+                "Critical": "#d62728",  # red
+                "High": "#ff7f0e",      # orange
+                "Medium": "#ffbf00",    # yellow
+                "Low": "#1f77b4",       # blue
+                "Info": "#2ca02c",      # green
+            }
+            counts = {s: 0 for s in severities}
+
+            for f in findings or []:
+                sev = self._normalize_severity(f.get("severity", "Unknown"))
+                if sev in counts:
+                    counts[sev] += 1
+
+            labels = [s for s, c in counts.items() if c > 0]
+            sizes = [counts[s] for s in labels]
+            colors = [severity_colors[s] for s in labels]
+
+            pie_path = None
+            if sizes:
+                pie_path = os.path.join(outdir, "severity_pie.png")
+                plt.figure()
+                wedges, texts, autotexts = plt.pie(
+                    sizes,
+                    colors=colors,
+                    autopct="%1.1f%%",
+                    startangle=140,
+                    textprops={"color": "w"}
+                )
+                plt.legend(
+                    wedges,
+                    labels,
+                    title="Severity",
+                    loc="center left",
+                    bbox_to_anchor=(1, 0, 0.5, 1)
+                )
+                plt.title("Vulnerabilities by Severity")
+                plt.tight_layout()
+                plt.savefig(pie_path, bbox_inches="tight")
+                plt.close()
+
+            # --- Bar: by category
+            counts = defaultdict(int)
+            for f in findings or []:
+                cat = f.get("category") or "Uncategorized"
+                counts[cat] += 1
+
+            bar_path = None
+            if counts:
+                bar_path = os.path.join(outdir, "category_bar.png")
+                plt.figure()
+                plt.bar(list(counts.keys()), list(counts.values()))
+                plt.xticks(rotation=45, ha="right")
+                plt.title("Vulnerabilities by Category")
+                plt.tight_layout()
+                plt.savefig(bar_path, bbox_inches="tight")
+                plt.close()
+
+            return pie_path, bar_path
+        except Exception as e:
+            self.logger.warning(f"Chart generation failed (non-fatal): {e}")
+            return None, None
+
+        
 
     def generate(self, data: Dict, filename: Optional[str] = None, 
             fmt: str = "word", console: bool = False) -> Union[str, Dict]:
@@ -285,6 +385,7 @@ Vulnerabilities:
                 elif "CVE" in vuln.get("name", ""):
                     entry["type"] = "NVD Vulnerability"
                     entry["cve_id"] = vuln["name"].split(" - ")[-1]
+                    entry["sla"] = self._sla(entry["severity"])
                 
                 terminal_data["vulnerabilities"].append(entry)
         
@@ -347,6 +448,17 @@ Vulnerabilities:
                 for sev, count in severity_counts.items():
                     summary.add_run(f"- {sev}: {count}\n")
             
+            # --- NEW: Insert charts in Executive Summary (non-fatal if missing) ---
+            try:
+                pie_path = self._generate_charts(vulns, output_dir=os.path.dirname(filepath))
+                if pie_path and os.path.exists(pie_path):
+                    doc.add_paragraph()
+                    doc.add_picture(pie_path, width=Inches(4.5))
+            except Exception as _e:
+                # Do not fail the whole report if charts fail
+                pass
+
+
             # Detailed Findings
             if vulns:
                 doc.add_heading("Detailed Findings", level=1)
@@ -369,6 +481,19 @@ Vulnerabilities:
                     severity.add_run("\nCVSS Score: ").bold = True
                     cvss_text = self._format_cvss_display(vuln.get("cvss_score"))
                     severity.add_run(cvss_text)
+
+                                        # --- NEW: Category (if available) ---
+                    category = vuln.get("category")
+                    if category:
+                        catp = doc.add_paragraph()
+                        catp.add_run("Category: ").bold = True
+                        catp.add_run(str(category))
+
+                    # --- NEW: SLA guidance ---
+                    slap = doc.add_paragraph()
+                    slap.add_run("SLA: ").bold = True
+                    slap.add_run(self._sla(sev_text))
+
                     
                     # Color coding
                     sev_text_lower = sev_text.lower()
@@ -469,6 +594,17 @@ Vulnerabilities:
                 for sev, count in severity_counts.items():
                     pdf.cell(0, 10, to_latin1(f"- {sev}: {count}"), ln=True)
             
+                        # --- NEW: Insert charts in Executive Summary ---
+                try:
+                    pie_path, bar_path = self._generate_charts(vulns, output_dir=os.path.dirname(filepath))
+                    if pie_path and os.path.exists(pie_path):
+                        pdf.ln(3)
+                        pdf.image(pie_path, w=120)
+                except Exception as _e:
+                    # Non-fatal
+                    pass
+
+
             # Detailed Findings
             if vulns:
                 pdf.add_page()
@@ -560,6 +696,29 @@ Vulnerabilities:
                     pdf.multi_cell(0, 10, to_latin1(vuln.get("business_impact", "N/A")))
                     
                     pdf.ln(5)
+
+                    # --- NEW: Category (if any) ---
+                    category = vuln.get("category")
+                    if category:
+                        pdf.set_font("Arial", 'B', 12)
+                        pdf.cell(40, 10, to_latin1("Category:"))
+                        pdf.set_font("Arial", '', 12)
+                        pdf.cell(0, 10, to_latin1(str(category)), ln=True)
+
+                    # --- NEW: OWASP (if any) ---
+                    owasp = vuln.get("owasp") or vuln.get("owasp_top10")
+                    if owasp:
+                        pdf.set_font("Arial", 'B', 12)
+                        pdf.cell(40, 10, to_latin1("OWASP:"))
+                        pdf.set_font("Arial", '', 12)
+                        pdf.cell(0, 10, to_latin1(str(owasp)), ln=True)
+
+                    # --- NEW: SLA guidance ---
+                    pdf.set_font("Arial", 'B', 12)
+                    pdf.cell(40, 10, to_latin1("SLA:"))
+                    pdf.set_font("Arial", '', 12)
+                    pdf.cell(0, 10, to_latin1(self._sla(severity)), ln=True)
+
             
             pdf.output(filepath)
             return filepath
@@ -594,6 +753,7 @@ Vulnerabilities:
                         print(f"   Description: {vuln.get('description', 'N/A')}")
                     print(f"   Business Impact: {vuln.get('business_impact', 'N/A')[:120]}...")
                     print("   Remediation Steps:")
+                    print(f"   SLA: {vuln.get('sla', self._sla(vuln['severity']))}")
                     for step in vuln.get('remediation', [])[:3]:
                         print(f"     - {step[:100]}{'...' if len(step) > 100 else ''}")
             else:

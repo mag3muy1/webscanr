@@ -130,11 +130,11 @@ def main():
 
     # === Reporting options ===
     report_group = parser.add_argument_group('Reporting options')
+    report_group.add_argument("--hf-token", type=str, help="Hugging Face API token (overrides env HF_TOKEN)")
     report_group.add_argument("--report-format", choices=["word", "pdf", "json"], help="Generate report in the specified format")
     report_group.add_argument("--report-name", type=str, help="Specify the output report filename (without extension)")
     report_group.add_argument("--stdout", action="store_true", help="Print output as JSON in terminal")
     report_group.add_argument("--verbose", action="store_true", help="Show verbose output when using --stdout")
-    report_group.add_argument("--hf-token", type=str, help="Hugging Face API token for AI-enhanced reports")
 
     args = parser.parse_args()
 
@@ -345,6 +345,8 @@ def main():
 
         # Initialize ReportGenerator with Hugging Face API
         hf_token = args.hf_token or os.getenv("HF_TOKEN")
+        if not hf_token:
+            print("[!] Hugging Face token (hf_token) is not set. AI-based reporting will be disabled.")
         generator = ReportGenerator(
             use_ai=bool(hf_token and args.report_format),
             api_token=hf_token
