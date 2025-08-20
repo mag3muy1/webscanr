@@ -1,116 +1,196 @@
-To populate more:
-webscanr/
+## WebScanr
+
+**WebScanr** is an open-source automated web vulnerability scanner designed to detect common web application vulnerabilities, map them to CVEs, and generate clear, actionable reports.
+It is built to be a lightweight yet powerful alternative to commercial scanners like **Acunetix** and **Burp Suite**, optimized for **speed, accuracy, and usability**.
+
+---
+
+## ✨ Features
+
+* **Vulnerability Detection**
+
+  * SQL Injection (SQLi) – error-based parameter scanning
+  * Cross-Site Scripting (XSS) – reflected, popup-based, and DOM-based
+  * Outdated Components – fingerprints web technologies and checks versions
+  * Security Misconfigurations – checks headers, exposed paths, expired SSL, etc.
+
+* **CVE Integration**
+
+  * Real-time CVE updates via **National Vulnerability Database (NVD)**
+  * Offline caching for local scans
+  * Maps findings to CVEs with **CVSS severity ratings**
+
+* **Performance Optimization**
+
+  * Asynchronous HTTP requests
+  * Threading & multiprocessing
+  * Selective payload fuzzing for efficiency
+
+* **Automated Reporting**
+
+  * Generates reports using **Hugging Face LLM API**
+  * Export formats: **Word (.docx)**, **JSON (.json)**, **PDF (.pdf)**
+  * Includes: summary, PoCs, step-by-step remediation, severity ratings, and business impact
+
+* **CLI Driven**
+
+  * Intuitive command-line interface (via `argparse`)
+  * Clean terminal output
+  * Works on **any modern Linux distribution**
+
+* **Custom Wordlists**
+
+  * Supports external payloads from **SecLists**, **FuzzDB**, or custom files
+
+---
+
+## 📂 Project Structure
+
+```
+webscanr
+├── main.py                 # Entry point: CLI and scan orchestration
+├── requirements.txt        # Python dependencies
+├── README.md               # Project documentation
+├── ExposedPath.txt         # Payloads for exposed path scanning
+├── SQLPayload.txt          # SQL injection payloads
+├── XSSPayload.txt          # XSS payloads
 │
-├── main.py                    # Entry point: handles CLI and orchestrates scans
-├── payloads/
-│   └── XSSPayload.txt         # Your XSS payload file
-├── scanner/
+├── fetch_version/          # Version fetchers for outdated components
+│   ├── bootstrapfetch.py
+│   ├── electronfetch.py
+│   ├── momentfetch.py
+│   ├── reactfetch.py
+│   ├── tensorfetch.py
+│   └── __init__.py
+│
+├── scanner/                # Core scanning modules
 │   ├── __init__.py
-│   ├── payload_manager.py     # Load and manage payloads
-│   ├── tech_scanner.py        # Uses WebTech to fingerprint technologies
-│   ├── form_scanner.py        # Extracts and submits forms
-│   ├── xss_scanner.py         # Handles reflected XSS scanning
-│   ├── popup_scanner.py       # Selenium-based popup detection (optional)
-│   └── dom_scanner.py         # DOM-based payload injection (optional)
+│   ├── ai_helper.py        # HuggingFace LLM integration for reporting
+│   ├── form_scanner.py     # Extract and submit forms
+│   ├── misconfig_scanner.py# Misconfiguration checks (headers, SSL, files)
+│   ├── nvd_checker.py      # NVD CVE integration
+│   ├── outdated_checker.py # Compare versions against latest
+│   ├── payload_manager.py  # Load/manage payloads
+│   ├── report_gen.py       # Report generation (Word, PDF, JSON)
+│   ├── sql_scanner.py      # SQL Injection scanner
+│   ├── tech_scanner.py     # WebTech-based fingerprinting
+│   ├── web_crawl.py        # Crawler for internal links
+│   ├── xss_scanner.py      # Reflected XSS detection
+│   └── templates/          # Report templates
+│       ├── pdf_template.html
+│       └── word_template.docx
+│
+├── reports/                # Generated reports
+│   ├── finalized-reporting.pdf
+│   ├── hf-token-new-model.docx
+│   ├── testing.pdf
+│   ├── webscanr_report_*.{pdf,docx,json}
+│   └── ...
+│
+└── __pycache__/            # Python cache files
+
+```
+
+---
+
+## ⚡ Installation
+
+```bash
+# Clone the repo
+git clone https://github.com/yourusername/webscanr.git
+cd webscanr
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+## Generating HuggingFace Token
+1. Register a HuggingFace account at https://huggingface.co/
+2. Visit token settings at https://huggingface.co/settings/tokens
+3. Click "Create New Token"
+4. Choose "Write" for the token type
+5. Copy the token generated
+
+---
+
+## 🚀 Usage
+
+```bash
+export HF_TOKEN=xxxxxxxxxxx # if you wish to use the reporting feature
+
+# without report
+python3 main.py http://target.com --all
+
+# producing report
+python3 main.py http://target.com --all --report-format pdf --report-name name_goes-here
+```
+
+---
+
+### CLI Options
+
+| Argument            | Description                            |
+| ------------------- | -------------------------------------- |
+| `url`               | **(positional)** Target URL            |
+| `-h, --help`        | Show help message and exit             |
+| `--threads THREADS` | Number of threads (**default:** 10)    |
+| `--stop-on-success` | Stop when first vulnerability is found |
+
+#### 🔎 Scan Options
+
+| Flag                    | Description                                                    |
+| ----------------------- | -------------------------------------------------------------- |
+| `--all`                 | Run all available scans                                        |
+| `--tech`                | Run technology fingerprinting                                  |
+| `--check-outdated`      | Check if detected technologies are outdated                    |
+| `--xss`                 | Run reflected XSS scan                                         |
+| `--dom`                 | Run DOM-based XSS detection (Selenium)                         |
+| `--sqli`                | Run SQL injection scan                                         |
+| `--check-misconfig`     | Run misconfiguration checks (headers, SSL, exposed files)      |
+| `--crawl`               | Crawl and list internal pages                                  |
+| `--scan-crawled`        | Scan all crawled pages with enabled scans (XSS, DOM XSS, SQLi) EXTREMELY SLOW|
+| `--max-pages MAX_PAGES` | Maximum number of pages to crawl (**default:** 30)             |
+| `--nvd-check`           | Check detected technologies against NVD                        |
+
+#### 📝 Reporting Options
+
+| Flag                              | Description                                            |
+| --------------------------------- | ------------------------------------------------------ |
+| `--report-format {word,pdf,json}` | Generate report in the specified format                |
+| `--report-name REPORT_NAME`       | Specify the output report filename (without extension) |
+| `--stdout`                        | Print output as JSON in terminal                       |
+| `--verbose`                       | Show verbose output when using `--stdout`              |
 
 
-To do:
-[DONE]
-- implement crawler
+---
 
-[DONE]
-- implement XSS Scanner
-        - reflected xss [done]
-        - upgrade XSS for popup based detection
+## 📊 Example Report
 
-[DONE]
-- implement SQLi Scanner
-        - scan for parameters (error-based) [done]
+A generated report includes:
 
-[DONE]
-- misconfiguration
-        - headers [done]
-                - HSTS
-                - etc
-        - check for exposed things 
-                - server [done]
-                - exposed paths [done]
-        - check if theres any expired SSL certificates [done]
+* Executive summary
+* Technical findings with PoCs
+* Severity ratings (CVSS-based)
+* Business impact analysis
+* Remediation steps
 
-[DONE]
-- outdated-components 
-        - web tech grabbing [done]
-        - check whether it is outdated against the current version [done]
+---
 
-[DONE]
-- implement vuln database (NVD)
+## 🔒 Non-Functional Requirements
 
-[DONE]
-- integrate report generation
-- integrate Hugging Face [TOGETHER AI]
-- fine tune reporting elements
+* **Portability**: Runs on Linux without commercial dependencies
+* **Open Source**: Released under **MIT License**
+* **Extensibility**: Modular structure to easily add new scanners, formats, or integrations
 
 
+---
 
-> Project Requirement Specification
-        📌 Functional Requirements
-        1. Vulnerability Detection
-                Must detect common web application vulnerabilities, including:
-                SQL Injection (SQLi)
-                Cross-Site Scripting (XSS)
-                Outdated third-party components (e.g., jQuery, Bootstrap)
-                Security misconfigurations (e.g., exposed directories, verbose headers)
-        2. CVE Integration
-                Integrate with the National Vulnerability Database (NVD) to:
-                Fetch CVE updates in real-time
-                Cache CVE data locally for offline scans
-                Map detected issues to known CVEs with CVSS severity scores
-        3. Performance Optimization
-                Engineered for fast scanning speeds through:
-                Asynchronous HTTP requests
-                Selective payload fuzzing
-                Threading or multiprocessing
-                Accuracy must not be compromised; false positives and negatives must be minimized.
-        4. Automated Reporting Engine
-                Uses HuggingFace’s LLM API to generate natural language reports.
-                Supports export formats:
-                Microsoft Word (.docx)
-                JSON (.json)
-                PDF (.pdf)
-                Reports should include:
-                Summary of findings
-                Proof of concept (PoC) snippets
-                Step-by-step remediation guidance
-                Severity ratings based on CVSS scores
-                Business impact analysis
-        5. User Interface
-                Fully command-line interface (CLI) driven.
-                Requires minimal setup and should work on any modern Linux distribution.
-        6. Wordlist Support
-                Allows the user to specify custom payload files (e.g., from SecLists, FuzzDB).
-        🔒 Non-Functional Requirements
-        1. Portability
-                Tool must be operable in Linux environments without dependencies on commercial tools or platforms.
-        2. Open-Source Accessibility
-                Codebase to be published under a permissive open-source license (e.g., MIT, Apache 2.0).
-                Designed as a free alternative to commercial scanners like Acunetix and Burp Suite.
-        3. Usability
-                Should offer:
-                Clean terminal output
-                Intuitive CLI options (via argparse or click)
-                Usage examples in help menu (--help)
-        4. Extensibility
-                Modular codebase to support easy addition of:
-                New vulnerability types
-                Additional report formats
-                API support (e.g., Slack alerts, webhook integration)
-        📊 Pain Points Addressed
-        Based on user research, WebScanr focuses on:
-        Clarity of reports: Through LLM-powered descriptions and clean formatting
-        Scan speed: Optimized through fast HTTP engines and fuzzing strategies
-        Accuracy and relevance: By mapping findings to NVD CVEs
-        Actionability: Every issue comes with clear remediation steps
-        Export flexibility: Supports preferred report formats (PDF, Word, JSON)
+## 🤝 Contributing
 
+Contributions are welcome! Please fork the repository, create a branch, and submit a pull request.
 
-The proposed automated web vulnerability scanner, “WebScanr” must effectively detect common vulnerabilities including SQL injection, cross-site scripting, outdated components, and security misconfigurations, while integrating real-time NVD/CVE updates with offline caching capabilities. Performance optimization is critical and the proposed scanner should be prioritizing fast scanning speeds while maintaining high accuracy. The reporting engine, powered by HuggingFace's LLM API, should generate comprehensive yet clear reports in Word, JSON or PDF formats corresponding to user’s preference. The report should contain proof of concepts, step-by-step remediation guidance, severity ratings based on CVSS scores, and business impact analysis. For usability, the tool will feature a command-line interface built with Python for Linux environments, designed with minimal setup complexity. As a free and open-source solution, it aims to serve as an accessible alternative to commercial scanners like Acunetix. These requirements directly address the top pain points identified in user surveys, focusing on report clarity, accuracy, and speed while incorporating the most requested features such as actionable remediation steps and multiple export formats.
+---
+
+## 📜 License
+
+This project is licensed under the **MIT License** – see the [LICENSE](LICENSE) file for details.
