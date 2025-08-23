@@ -118,9 +118,7 @@ def main():
     scan_group.add_argument("--all", action="store_true", help="Run all available scans")
     scan_group.add_argument("--tech", action="store_true", help="Run technology fingerprinting")
     scan_group.add_argument("--check-outdated", action="store_true", help="Check if detected technologies are outdated")
-    scan_group.add_argument("--xss", action="store_true", help="Run reflected XSS scan")
-    # scan_group.add_argument("--popup", action="store_true", help="Run popup-based XSS detection (Selenium)")  # Removed popup scan
-    scan_group.add_argument("--dom", action="store_true", help="Run DOM-based XSS detection (Selenium)")
+    scan_group.add_argument("--xss", action="store_true", help="Run reflected and DOM-based XSS scan")
     scan_group.add_argument("--sqli", action="store_true", help="Run SQL injection scan")
     scan_group.add_argument("--check-misconfig", action="store_true", help="Run misconfiguration checks (headers, SSL, exposed files)")
     scan_group.add_argument("--crawl", action="store_true", help="Crawl and list internal pages")
@@ -130,7 +128,6 @@ def main():
 
     # === Reporting options ===
     report_group = parser.add_argument_group('Reporting options')
-    report_group.add_argument("--hf-token", type=str, help="Hugging Face API token (overrides env HF_TOKEN)")
     report_group.add_argument("--report-format", choices=["word", "pdf", "json"], help="Generate report in the specified format")
     report_group.add_argument("--report-name", type=str, help="Specify the output report filename (without extension)")
     report_group.add_argument("--stdout", action="store_true", help="Print output as JSON in terminal")
@@ -144,7 +141,6 @@ def main():
         args.check_outdated = True
         args.xss = True
         # args.popup = True  # Removed popup scan
-        args.dom = True
         args.sqli = True
         args.check_misconfig = True
         args.crawl = True
@@ -194,7 +190,7 @@ def main():
                 report_data["vulnerabilities"].extend(nvd_results)
 
         # === XSS Scanning ===
-        if args.xss or args.dom:
+        if args.xss:
             scanner = XSSScanner(
                 url=args.url,
                 max_workers=args.threads,
@@ -202,40 +198,42 @@ def main():
                 headless=True
             )
 
-            # For the XSS scanner results as well:
-            if args.xss:
-                xss_results = scanner.scan_reflected_xss()
-                if xss_results:
-                    report_data["vulnerabilities"].extend(xss_results)
+            # Reflected XSS Scan
+            xss_results = scanner.scan_reflected_xss()
+            if xss_results:
+                report_data["vulnerabilities"].extend(xss_results)
 
-            if args.dom:
-                dom_results = scanner.scan_dom_xss()
-                filtered_dom = []
-                for finding in (dom_results or []):
-                    url = finding.get('url')
-                    if (
-                        finding.get('payload')
-                        and url
-                        and url.strip()
-                        and not url.strip().lower().startswith('data:text/html')
-                    ):
-                        resp_text = get_response_text(url)
-                        if not is_generic_error(resp_text):
-                            filtered_dom.append(finding)
+            # DOM-based XSS Scan
+            dom_results = scanner.scan_dom_xss()
+            filtered_dom = []
+            for finding in (dom_results or []):
+                url = finding.get('url')
+                if (
+                    finding.get('payload')
+                    and url
+                    and url.strip()
+                    and not url.strip().lower().startswith('data:text/html')
+                ):
+                    resp_text = get_response_text(url)
+                    if not is_generic_error(resp_text):
+                        filtered_dom.append(finding)
+            if filtered_dom:
                 report_data["vulnerabilities"].extend(filtered_dom)
-                # Print a refined DOM XSS summary if not reporting to file/stdout
-                if not args.report_format and not args.stdout:
-                    print("\n========== DOM-based XSS Summary ==========")
-                    if not filtered_dom:
-                        print('\033[92m' + "[-] No DOM-based XSS vulnerabilities found." + '\033[0m')
-                    else:
-                        for idx, finding in enumerate(filtered_dom, 1):
-                            print(f"[#{idx}] Payload: {finding.get('payload','')}")
-                            print(f"Type: {finding.get('type','')}")
-                            if finding.get('alert_text'):
-                                print(f"Alert Text: {finding['alert_text']}")
-                            print(f"Affecting URL: {finding.get('url','')}")
-                            print()
+
+            # Print summary if no reporting to file/stdout
+            if not args.report_format and not args.stdout:
+                print("\n========== DOM-based XSS Summary ==========")
+                if not filtered_dom:
+                    print('\033[92m' + "[-] No DOM-based XSS vulnerabilities found." + '\033[0m')
+                else:
+                    for idx, finding in enumerate(filtered_dom, 1):
+                        print(f"[#{idx}] Payload: {finding.get('payload','')}")
+                        print(f"Type: {finding.get('type','')}")
+                        if finding.get('alert_text'):
+                            print(f"Alert Text: {finding['alert_text']}")
+                        print(f"Affecting URL: {finding.get('url','')}")
+                        print()
+
 
             # === SQL Injection ===
             if args.sqli:
@@ -296,32 +294,30 @@ def main():
         if args.scan_crawled and crawled_links:
             print("\n[+] Scanning all crawled pages... This might take some ~ a lot of time")
             for page_url in crawled_links:
-                if args.xss or args.dom:
+                if args.xss:
                     scanner = XSSScanner(
                         url=page_url,
                         max_workers=args.threads,
                         stop_on_success=args.stop_on_success,
                         headless=True
                     )
-                    if args.xss:
-                        xss_results = scanner.scan_reflected_xss()
-                        if xss_results:
-                            report_data["vulnerabilities"].extend(xss_results)
-                    if args.dom:
-                        dom_results = scanner.scan_dom_xss()
-                        filtered_dom = []
-                        for finding in (dom_results or []):
-                            url = finding.get('url')
-                            if (
-                                finding.get('payload')
-                                and url
-                                and url.strip()
-                                and not url.strip().lower().startswith('data:text/html')
-                            ):
-                                resp_text = get_response_text(url)
-                                if not is_generic_error(resp_text):
-                                    filtered_dom.append(finding)
-                        report_data["vulnerabilities"].extend(filtered_dom)
+                    xss_results = scanner.scan_reflected_xss()
+                    if xss_results:
+                        report_data["vulnerabilities"].extend(xss_results)
+                    dom_results = scanner.scan_dom_xss()
+                    filtered_dom = []
+                    for finding in (dom_results or []):
+                        url = finding.get('url')
+                        if (
+                            finding.get('payload')
+                            and url
+                            and url.strip()
+                            and not url.strip().lower().startswith('data:text/html')
+                        ):
+                            resp_text = get_response_text(url)
+                            if not is_generic_error(resp_text):
+                                filtered_dom.append(finding)
+                    report_data["vulnerabilities"].extend(filtered_dom)
                 if args.sqli:
                     sql_scanner = SQLiScanner(
                         url=page_url,
@@ -344,7 +340,7 @@ def main():
         report_data["timestamp"] = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
 
         # Initialize ReportGenerator with Hugging Face API
-        hf_token = args.hf_token or os.getenv("HF_TOKEN")
+        hf_token = os.getenv("HF_TOKEN")
         if not hf_token:
             print("[!] Hugging Face token (hf_token) is not set. AI-based reporting will be disabled.")
         generator = ReportGenerator(
@@ -357,7 +353,7 @@ def main():
         elif args.report_format:
             output_path = generator.generate(data=report_data, fmt=args.report_format, filename=args.report_name)
             print(f"[+] Report saved to: {output_path}")
-        elif not args.all and not any([args.tech, args.check_outdated, args.xss, args.dom, 
+        elif not args.all and not any([args.tech, args.check_outdated, args.xss, 
                      args.sqli, args.check_misconfig, args.nvd_check, args.crawl]):
             print("[!] No scan type specified. Use --help to see available options.")
     except KeyboardInterrupt:
