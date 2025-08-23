@@ -43,52 +43,16 @@ It is built to be a lightweight yet powerful alternative to commercial scanners 
   * Supports external payloads from **SecLists**, **FuzzDB**, or custom files
 
 ---
+## 🚀 Usage
 
-## 📂 Project Structure
+```bash
+export HF_TOKEN=xxxxxxxxxxx # if you wish to use the reporting feature
 
-```
-webscanr
-├── main.py                 # Entry point: CLI and scan orchestration
-├── requirements.txt        # Python dependencies
-├── README.md               # Project documentation
-├── ExposedPath.txt         # Payloads for exposed path scanning
-├── SQLPayload.txt          # SQL injection payloads
-├── XSSPayload.txt          # XSS payloads
-│
-├── fetch_version/          # Version fetchers for outdated components
-│   ├── bootstrapfetch.py
-│   ├── electronfetch.py
-│   ├── momentfetch.py
-│   ├── reactfetch.py
-│   ├── tensorfetch.py
-│   └── __init__.py
-│
-├── scanner/                # Core scanning modules
-│   ├── __init__.py
-│   ├── ai_helper.py        # HuggingFace LLM integration for reporting
-│   ├── form_scanner.py     # Extract and submit forms
-│   ├── misconfig_scanner.py# Misconfiguration checks (headers, SSL, files)
-│   ├── nvd_checker.py      # NVD CVE integration
-│   ├── outdated_checker.py # Compare versions against latest
-│   ├── payload_manager.py  # Load/manage payloads
-│   ├── report_gen.py       # Report generation (Word, PDF, JSON)
-│   ├── sql_scanner.py      # SQL Injection scanner
-│   ├── tech_scanner.py     # WebTech-based fingerprinting
-│   ├── web_crawl.py        # Crawler for internal links
-│   ├── xss_scanner.py      # Reflected XSS detection
-│   └── templates/          # Report templates
-│       ├── pdf_template.html
-│       └── word_template.docx
-│
-├── reports/                # Generated reports
-│   ├── finalized-reporting.pdf
-│   ├── hf-token-new-model.docx
-│   ├── testing.pdf
-│   ├── webscanr_report_*.{pdf,docx,json}
-│   └── ...
-│
-└── __pycache__/            # Python cache files
+# without report
+python3 main.py http://target.com --all
 
+# producing report
+python3 main.py http://target.com --all --report-format pdf --report-name name_goes-here
 ```
 
 ---
