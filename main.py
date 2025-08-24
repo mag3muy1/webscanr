@@ -1,12 +1,10 @@
 import argparse
-import json
 from datetime import datetime, timezone
 import os
 import random
-import requests  # <-- Add this import
+import requests
 from dotenv import load_dotenv
 from scanner import (
-    PayloadManager,
     TechnologyScanner,
     XSSScanner,
     SQLiScanner,
@@ -99,7 +97,7 @@ def is_sql_error(response_text):
 
 def get_response_text(url):
     try:
-        resp = requests.get(url, timeout=10)
+        resp = requests.get(url, timeout=30)
         return resp.text
     except Exception:
         return ""
@@ -140,12 +138,10 @@ def main():
         args.tech = True
         args.check_outdated = True
         args.xss = True
-        # args.popup = True  # Removed popup scan
         args.sqli = True
         args.check_misconfig = True
         args.crawl = True
         args.nvd_check = True
-        # Do NOT enable scan-crawled with --all
 
     # Only print scan started message if a URL is provided and looks like a URL
     if args.url and (args.url.startswith('http://') or args.url.startswith('https://')):
@@ -162,8 +158,8 @@ def main():
         tqdm.disable = True
 
     try:
-        # === Technology Fingerprinting ===
         tech_info = {'frontend': [], 'backend': [], 'other': []}
+        # === Technology Fingerprinting ===
         if args.tech:
             detected_tech = TechnologyScanner.get_website_technologies(args.url)
             if detected_tech:
@@ -184,10 +180,12 @@ def main():
                 outdated = checker.check_outdated(verbose=args.verbose)
                 if outdated:
                     report_data["vulnerabilities"].extend(outdated)
-            if args.nvd_check:
+
+        # === NVD Check ===
+        if args.nvd_check:
                 nvd_checker = NVDChecker(tech_info)
                 nvd_results = nvd_checker.check(verbose=args.verbose)  
-                report_data["vulnerabilities"].extend(nvd_results)
+                report_data["vulnerabilities"].extend(nvd_results)    
 
         # === XSS Scanning ===
         if args.xss:
@@ -220,50 +218,25 @@ def main():
             if filtered_dom:
                 report_data["vulnerabilities"].extend(filtered_dom)
 
-            # Print summary if no reporting to file/stdout
-            if not args.report_format and not args.stdout:
-                print("\n========== DOM-based XSS Summary ==========")
-                if not filtered_dom:
-                    print('\033[92m' + "[-] No DOM-based XSS vulnerabilities found." + '\033[0m')
-                else:
-                    for idx, finding in enumerate(filtered_dom, 1):
-                        print(f"[#{idx}] Payload: {finding.get('payload','')}")
-                        print(f"Type: {finding.get('type','')}")
-                        if finding.get('alert_text'):
-                            print(f"Alert Text: {finding['alert_text']}")
-                        print(f"Affecting URL: {finding.get('url','')}")
-                        print()
 
-
-            # === SQL Injection ===
-            if args.sqli:
-                sql_scanner = SQLiScanner(
-                    url=args.url,
-                    stop_on_success=args.stop_on_success
-                )
-                sqli_results = sql_scanner.scan()
-                filtered_sqli = []
-                for finding in (sqli_results or []):
-                    test_url = finding.get('test_url', args.url)
-                    if finding.get('payload') and (
-                        (finding.get('type') == 'form' and finding.get('form_name')) or
-                        (finding.get('type') != 'form' and finding.get('param'))
-                    ):
-                        resp_text = get_response_text(test_url)
-                        if is_sql_error(resp_text):
-                            filtered_sqli.append(finding)
-                report_data["vulnerabilities"].extend(filtered_sqli)
-                # Print a refined SQLi summary if not reporting to file/stdout
-                if not args.report_format and not args.stdout:
-                    print("\n========== SQL Injection Summary ==========")
-                    if not filtered_sqli:
-                        print('\033[92m' + "[-] No SQL injection vulnerabilities found." + '\033[0m')
-                    else:
-                        for finding in filtered_sqli:
-                            if finding.get('type') == 'form':
-                                print(f"[Form] {finding.get('form_name','')}, Payload: {finding.get('payload','')}, Input: {finding.get('input','')}")
-                            else:
-                                print(f"[Param] {finding.get('param','')}, Payload: {finding.get('payload','')}")
+        # === SQL Injection ===
+        if args.sqli:
+            sql_scanner = SQLiScanner(
+                url=args.url,
+                stop_on_success=args.stop_on_success
+            )
+            sqli_results = sql_scanner.scan()
+            filtered_sqli = []
+            for finding in (sqli_results or []):
+                test_url = finding.get('test_url', args.url)
+                if finding.get('payload') and (
+                    (finding.get('type') == 'form' and finding.get('form_name')) or
+                     (finding.get('type') != 'form' and finding.get('param'))
+                ):
+                    resp_text = get_response_text(test_url)
+                    if is_sql_error(resp_text):
+                        filtered_sqli.append(finding)
+            report_data["vulnerabilities"].extend(filtered_sqli)
 
         # === Misconfigurations ===
         if args.check_misconfig:
@@ -286,9 +259,6 @@ def main():
             crawled_links = unique_links
             # Add unique crawled pages to report if crawl is enabled
             report_data["crawled_pages"] = crawled_links
-            if not args.report_format and not args.stdout:
-                for i, link in enumerate(crawled_links, 1):
-                    print(f"[{i}] {link}")
 
         # === Scan Crawled Pages Option ===
         if args.scan_crawled and crawled_links:
@@ -336,13 +306,10 @@ def main():
                                 filtered_sqli.append(finding)
                     report_data["vulnerabilities"].extend(filtered_sqli)
 
-        # === Report Generation ===
-        report_data["timestamp"] = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
-
         # Initialize ReportGenerator with Hugging Face API
         hf_token = os.getenv("HF_TOKEN")
         if not hf_token:
-            print("[!] Hugging Face token (hf_token) is not set. AI-based reporting will be disabled.")
+            print("\033[0;37m[!] Hugging Face token (hf_token) is not set. AI-based reporting will be disabled.\033[0m")
         generator = ReportGenerator(
             use_ai=bool(hf_token and args.report_format),
             api_token=hf_token

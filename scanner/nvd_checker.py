@@ -98,7 +98,7 @@ class NVDChecker:
         results = []
         tech_list = self.get_flattened_tech_list()
         if not tech_list:
-            print("[-] No technology information available")
+            print("[-] No technology information available, please run --tech to enable technology fingerprinting.")
             return results
 
         for tech in tech_list:

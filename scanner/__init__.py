@@ -15,7 +15,7 @@ __all__ = [
     "PayloadManager",
     "TechnologyScanner",
     "FormScanner",
-    "XSSScanner"
+    "XSSScanner",
     "SQLiScanner",
     "OutdatedComponentChecker",
     "MisconfigurationChecker",
@@ -23,3 +23,5 @@ __all__ = [
     "NVDChecker",
     "ReportGenerator"
 ]
+
+

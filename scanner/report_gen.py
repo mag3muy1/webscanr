@@ -292,18 +292,18 @@ Vulnerabilities:
                     match = re.search(r'\[.*\]', ai_response, re.DOTALL)
                     if match:
                         json_str = match.group(0)
+                        # Try to fix common truncation: add closing bracket if missing
+                        if not json_str.strip().endswith(']'):
+                            json_str += ']'
                         try:
                             parsed = _json.loads(json_str)
                         except Exception as e:
-                            # Try to parse as much as possible if the array is truncated
                             self.logger.warning(f"AI JSON appears truncated or malformed, attempting partial parse: {str(e)}")
                             # Try to parse as many valid top-level objects as possible
-                            # Only include objects that start and end with curly braces at the top level
                             items = re.findall(r'\{(?:[^{}]|\{[^{}]*\})*\}', json_str, re.DOTALL)
                             partial = []
                             for item in items:
                                 item = item.strip()
-                                # Ignore objects that are too short to be valid
                                 if not (item.startswith('{') and item.endswith('}')) or len(item) < 10:
                                     continue
                                 # Remove trailing commas (common in truncated arrays)
@@ -319,9 +319,21 @@ Vulnerabilities:
                             else:
                                 raise
                     else:
-                        raise ValueError("No JSON array found in AI response.")
+                        # Try to extract a single object if array is missing
+                        match_obj = re.search(r'\{.*\}', ai_response, re.DOTALL)
+                        if match_obj:
+                            try:
+                                parsed = [_json.loads(match_obj.group(0))]
+                            except Exception as e:
+                                self.logger.error(f"Failed to parse single-object AI response: {e}")
+                                parsed = []
+                        else:
+                            raise ValueError("No JSON array or object found in AI response.")
                 except Exception as e:
                     self.logger.error(f"Failed to parse AI batch response: {str(e)}\nRaw AI response:\n{ai_response}")
+                    # Save raw output for debugging
+                    with open("ai_report_raw.json", "w", encoding="utf-8") as f:
+                        f.write(ai_response)
                     parsed = []
 
             # Use as many valid AI-enhanced objects as possible, fallback to default for the rest

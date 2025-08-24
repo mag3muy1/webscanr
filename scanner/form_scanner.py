@@ -29,7 +29,7 @@ class FormScanner:
         return details
 
     @staticmethod
-    def submit_form(form_details, url, value):
+    def submit_form(form_details, url, value, timeout = 10):
         target_url = urljoin(url, form_details["action"])
         inputs = form_details["inputs"]
         data = {}
@@ -42,6 +42,6 @@ class FormScanner:
                 data[input_name] = input_value
 
         if form_details["method"] == "post":
-            return requests.post(target_url, data=data, verify=False)
+            return requests.post(target_url, data=data, verify=False, timeout=timeout)
         else:
-            return requests.get(target_url, params=data, verify=False)
+            return requests.get(target_url, params=data, verify=False, timeout=timeout)

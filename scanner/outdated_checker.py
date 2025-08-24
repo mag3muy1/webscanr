@@ -25,6 +25,11 @@ class OutdatedComponentChecker:
         print("\n========== Outdated Components Check ==========")
         report_entries = []
         
+        # Check if detected_tech is empty first
+        if not self.detected_tech:
+            print("[-] No technology information available, please run --tech to enable technology fingerprinting")
+            return report_entries
+        
         for tech in self.detected_tech:
             if not isinstance(tech, dict):
                 continue

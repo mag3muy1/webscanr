@@ -2,12 +2,13 @@ import threading
 import requests
 import signal
 import time
-from urllib.parse import urljoin, urlencode
+from urllib.parse import urljoin, urlencode, urlparse, parse_qs, urlunparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from selenium.common.exceptions import NoAlertPresentException
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 from tqdm import tqdm
 from pprint import pprint
-import html
 import re
 import random
 import string
@@ -33,11 +34,23 @@ class XSSScanner:
                 self.stop_flag.set()
             except:
                 pass
+    
+    def _init_driver(self):
+        options = Options()
+        if self.headless:
+            options.add_argument("--headless")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        driver = webdriver.Chrome(options=options)
+        driver.set_page_load_timeout(10)
+        return driver
 
     def scan_reflected_xss(self, payloads=None):
         forms = FormScanner.get_all_forms(self.url)
         payloads = payloads or PayloadManager.load_payloads('XSSPayload.txt')
         findings = []
+        local_stop_flag = threading.Event()
 
         # Get baseline response
         random_str = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
@@ -104,11 +117,13 @@ class XSSScanner:
             return False
 
         def task(form_details, payload):
-            if self.stop_flag.is_set():
+            if local_stop_flag.is_set():
                 return None
             try:
                 response = FormScanner.submit_form(form_details, self.url, payload)
                 if is_payload_exploitable(response.text, payload):
+                    if self.stop_on_success:
+                        local_stop_flag.set()
                     return {"payload": payload, "form": form_details}
             except requests.RequestException as e:
                 return {"error": str(e), "payload": payload}
@@ -122,17 +137,17 @@ class XSSScanner:
                     for payload in payloads:
                         futures.append(executor.submit(task, form_details, payload))
 
+                found = False
                 for future in as_completed(futures):
-                    if self.stop_flag.is_set():
-                        break
                     result = future.result()
                     with self.lock:
                         pbar.update(1)
-                        if result and "form" in result:
+                        if result and "form" in result and not found:
                             findings.append(result)
+                            found = True
                             if self.stop_on_success:
-                                self.stop_flag.set()
-                                break
+                                local_stop_flag.set()
+            # Do NOT break the loop early; let all futures complete
 
         print("\n========== Reflected XSS Summary ==========")
         if findings:
@@ -156,6 +171,7 @@ class XSSScanner:
                 print(f"Affected URL: {affected_url}")
                 print("Form Details:")
                 pprint(form)
+                print("\n")
                 
                 report_findings.append({
                     "name": f"Reflected XSS Vulnerability #{i}",
@@ -172,10 +188,12 @@ class XSSScanner:
                 })
             return report_findings
         else:
-            print('\033[92m' + "[-] No reflected XSS vulnerabilities found." '\033[0m')
+            print('\033[92m' + "[-] No reflected XSS vulnerabilities found." + '\033[0m')
             return []
 
-    def scan_dom_xss(self, payloads=None, print_summary=False):
+    def scan_dom_xss(self, payloads=None):
+        from urllib.parse import quote
+
         payloads = payloads or PayloadManager.load_payloads('XSSPayload.txt')
         popup_findings = []
         processed = 0
@@ -207,7 +225,8 @@ class XSSScanner:
                     return None
             except Exception as e:
                 if not isinstance(e, TimeoutError):
-                    print(f"[!] Error testing payload {payload}: {str(e)}")
+                    # Optionally log errors here, but don't print during progress
+                    pass
                 return None
             finally:
                 processed += 1
@@ -228,7 +247,6 @@ class XSSScanner:
                         result = future.result()
                         if result:
                             popup_findings.append(result)
-                            print(f"\n[!] Detected alert with DOM-based payload: {result['payload']}")
                             if self.stop_on_success:
                                 self.stop_flag.set()
                         pbar.update(1)
@@ -237,16 +255,47 @@ class XSSScanner:
         except Exception as e:
             print(f"[!] DOM XSS scan error: {str(e)}")
 
-        if print_summary:
-            print("\n========== DOM-based XSS Summary ==========")
-            if popup_findings:
-                print("[+] DOM-based XSS Vulnerabilities Found:")
-                for i, result in enumerate(popup_findings, 1):
-                    print(f"\n[!] Vulnerability #{i}")
-                    print(f"Payload: {result['payload']}")
-                    print(f"Type: {result.get('type')}")
-                    print(f"Alert Text: {result.get('alert')}")
-                    print(f"Affected URL: data:text/html,{result['payload']}")
-            else:
-                print("[-] No DOM-based XSS vulnerabilities found.")
+        # Unified summary logic (same as Reflected XSS)
+        print("\n========== DOM-based XSS Summary ==========")
+        if popup_findings:
+            print('\033[91m' + "[+] DOM-based XSS Vulnerabilities Found:" + '\033[0m')
+            report_findings = []
+            for i, result in enumerate(popup_findings, 1):
+                payload = result['payload']
+                vuln_type = result.get('type', 'dom-xss')
+                alert_text = result.get('alert')
+
+                # Build affected URL like reflected XSS
+                parsed = urlparse(self.url)
+                qs = parse_qs(parsed.query)
+                # Try to inject payload into the first query parameter, or use 'query' as default
+                if qs:
+                    first_param = list(qs.keys())[0]
+                    qs[first_param] = [payload]
+                else:
+                    qs['query'] = [payload]
+                new_query = urlencode(qs, doseq=True)
+                affected_url = urlunparse(parsed._replace(query=new_query))
+
+                print(f"\n[!] Vulnerability #{i}")
+                print(f"Payload: {payload}")
+                print(f"Affected URL: {affected_url}")
+                print(f"Type: {vuln_type}")
+                print(f"Alert Text: {alert_text}")
+                report_findings.append({
+                    "name": f"DOM-based XSS Vulnerability #{i}",
+                    "severity": "High",
+                    "description": f"DOM-based XSS vulnerability confirmed with payload: {payload}",
+                    "poc": f"Open {affected_url} in a browser",
+                    "remediation": [
+                        "Sanitize and validate all client-side data",
+                        "Avoid dangerous DOM sinks (e.g., innerHTML, document.write)",
+                        "Implement Content Security Policy (CSP)"
+                    ],
+                    "impact": "Attackers can execute arbitrary JavaScript in victim's browser",
+                    "affected_url": affected_url
+                })
+            return report_findings
+        else:
+            print('\033[92m' + "[-] No DOM-based XSS vulnerabilities found." + '\033[0m')
         return popup_findings  # Always return findings
