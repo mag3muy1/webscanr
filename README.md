@@ -61,7 +61,7 @@ python3 main.py http://target.com --all --report-format pdf --report-name name_g
 
 ```bash
 # Clone the repo
-git clone https://github.com/yourusername/webscanr.git
+git clone https://github.com/mag3muy1/webscanr.git
 cd webscanr
 
 # Install dependencies
